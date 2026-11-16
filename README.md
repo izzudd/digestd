@@ -51,6 +51,33 @@ Any OPDS client: point it at `https://<host>/opds`. The URL must include `/opds`
 - *OPDS, no files to install.* Settings → Connectivity → OPDS Servers → add `https://<host>/opds`, then browse from File Transfer → OPDS Browser.
 - *SD plugin, a one-tap list under Home → Plugins.* Copy `plugin/daily-digest/` to `/.crosspoint/plugins/daily-digest/` on the card (`/plugins` and `/.plugins` also work), then enable Settings → Connectivity → Plugins. Downloads land in `/Digest`; the firmware is told to read the Atom feed with its `xml` catalog mode instead of expecting JSON.
 
+## The feeds, and how they're grouped
+
+RSSPub lets you file each feed under a category, which is what keeps a 17-feed digest readable: the issue is built per feed, and a category is what a second schedule would select from later.
+
+| Category | Feeds |
+|---|---|
+| Engineering | Cloudflare Blog, Google Research, Meta Engineering, Netflix Tech Blog, Stripe Engineering, Shopify Engineering |
+| AI & Research | Hugging Face daily papers (via the worker below) |
+| Personal Blogs | Simon Willison, Pragmatic Engineer, Human Who Codes, Invasikode |
+| Community | Hacker News (100+ points), dev.to |
+| Design | Sidebar |
+| Podcast | Syntax.fm |
+| Hardware | Liliputing, Xteink News |
+
+When adding a feed later, give it a category in the same request: the dashboard has the dropdown, and `scripts/add-feed.sh` takes an optional category id as its third argument. An uncategorised feed still works, it just has no home in the list.
+
+### A feed that doesn't exist yet: Hugging Face papers
+
+[Hugging Face daily papers](https://huggingface.co/papers) has no RSS. The API is JSON (`/api/daily_papers`), `/papers/rss` answers 401, and the community RSS mirrors I tried were days stale. `workers/hf-papers.js` turns that JSON into Atom, keeps only papers submitted in the last N days and sorts by upvotes, so the digest gets the popular papers of the day instead of the firehose.
+
+```bash
+npx wrangler deploy workers/hf-papers.js --name hf-papers --compatibility-date 2025-09-01
+# add as a feed: https://<worker>.<your-subdomain>.workers.dev/?limit=12&days=2
+```
+
+Params: `limit` (1-30, default 8), `days` (default 2), `min_upvotes`. Upstream rejects `limit > 100` with a 400, which is why the worker fetches 100 and filters locally.
+
 ## Daily operation
 
 ```bash
@@ -76,6 +103,7 @@ docker-compose.yml        RSSPub container, pinned tag, volumes for db + epubs
 .env.example              dashboard credentials
 plugin/daily-digest/      CrossPoint SD plugin (device.json + manifest + README)
 scripts/                  health, feed management, on-demand generation
+workers/hf-papers.js      Cloudflare Worker: Hugging Face daily papers -> Atom
 docs/coolify.md           Coolify deploy runbook and its two traps
 ```
 

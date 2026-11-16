@@ -20,6 +20,14 @@ jobs:
           sudo apt-get install -y -qq shellcheck
           shellcheck --severity=error scripts/*.sh
 
+      - name: Worker module loads
+        run: |
+          node --input-type=module -e "
+          const m = await import('./workers/hf-papers.js');
+          if (typeof m.default.fetch !== 'function') process.exit(1);
+          console.log('worker module ok');
+          "
+
       - name: JSON and YAML parse
         run: |
           python3 - <<'PY'
