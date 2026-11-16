@@ -37,7 +37,7 @@ Then, in the dashboard (`http://<host>:3000`), add feeds and one schedule. Two s
 
 | Setting | Value used here | Why |
 |---|---|---|
-| `fetch_since_hours` | `30` | A window must be wider than the run interval. With a daily run and a strict 24 h window, an article published between two runs falls outside both windows and never appears in any issue. 30 h closes the gap; the ~6 h overlap can repeat one article across two issues. |
+| `fetch_since_hours` | `30` | Default window for ad-hoc runs. Each scheduled category overrides it (see the rotation below), because a window must be wider than that category's run interval — with a weekly schedule and a 24 h window, an article published between runs never appears in any issue. |
 | `cleanup_after_hours` | `168` | Keep a week of digests, then delete. Also keeps the OPDS list short. |
 
 `docs/coolify.md` has the Coolify-specific steps, including the two failures that cost the most time: the image has no `curl`/`wget` (so a Coolify health check rolls the deploy back as unhealthy), and Let's Encrypt cannot issue a certificate behind a proxied Cloudflare record until the challenge is answered by the origin.
@@ -60,12 +60,40 @@ RSSPub lets you file each feed under a category, which is what keeps a 17-feed d
 | Engineering | Cloudflare Blog, Google Research, Meta Engineering, Netflix Tech Blog, Stripe Engineering, Shopify Engineering |
 | AI & Research | Hugging Face daily papers (via the worker below) |
 | Personal Blogs | Simon Willison, Pragmatic Engineer, Human Who Codes, Invasikode |
-| Community | Hacker News (100+ points), dev.to |
+| Community | Hacker News (200+ points), dev.to |
 | Design | Sidebar |
 | Podcast | Syntax.fm |
 | Hardware | Liliputing, Xteink News |
 
 When adding a feed later, give it a category in the same request: the dashboard has the dropdown, and `scripts/add-feed.sh` takes an optional category id as its third argument. An uncategorised feed still works, it just has no home in the list.
+
+## The rotation: one category per day
+
+A 47-article issue a day is not a newspaper, it's homework. So each category gets its own weekly slot — one small issue arrives every morning at 05:00 WIB and the reader never holds more than one category at a time.
+
+| Arrives | Category | Window |
+|---|---|---|
+| Mon | Engineering | 168 h |
+| Tue | AI & Research | 48 h |
+| Wed | Community | 24 h |
+| Thu | Personal Blogs | 168 h |
+| Fri | Design | 72 h |
+| Sat | Hardware | 168 h |
+| Sun | Podcast | 168 h |
+
+Windows follow each category's cadence: a weekly slot needs a week's window or posts fall between runs; Community is a firehose (Hacker News plus dev.to) so it samples the last 24 h only — that is the deliberate trade for keeping the issue small, and it's why HN is pinned to 200+ points.
+
+Creating them is fiddly because of one conversion quirk (see below), so this is the exact call per slot:
+
+```bash
+# one schedule per category; hour/minute are converted by RSSPub, day_of_week is not what you'd expect
+curl -u "$RPUB_USER:$RPUB_PASS" -X POST "$RPUB_URL/schedules" -H 'Content-Type: application/json' -d '{
+  "hour": 15, "minute": 0, "timezone": "UTC", "schedule_type": "rss", "frequency": "weekly",
+  "day_of_week": 6, "category_ids": [1], "fetch_since_hours_override": 168
+}'
+```
+
+**The quirk:** RSSPub takes your `hour`/`minute`/`day_of_week` in the timezone you name, converts them to the container's local time, and stores *that* as a cron — which `tokio-cron-scheduler` then fires in UTC. With `TZ=Asia/Jakarta` that is +7 h and +1 day on the stored cron. `hour: 15` becomes `22:00` (correct: 05:00 WIB), but the weekday also lands one day late, so the input day is `arrival - 2` (mod 7). Always read `cron_expression` back and trust only that: `0 0 22 * * 0` is "Sunday night UTC, arrives Monday".
 
 ### A feed that doesn't exist yet: Hugging Face papers
 
