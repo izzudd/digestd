@@ -1,26 +1,28 @@
-# eink-feed
+# digestd
 
-A daily RSS digest for an e-ink reader (Xteink X4 Pro running [CrossPoint](https://crosspointreader.com)), built from feeds on a server and pulled over OPDS.
+Feeds in, one EPUB issue out, every morning.
 
-The reader cannot do this itself: CrossPoint deliberately keeps background Wi-Fi and an RSS feature out of scope (single-core ESP32-S3, deep sleep), so nothing on the device can poll feeds on a schedule. Instead, [RSSPub](https://github.com/harshit181/RSSPub) runs in a container, rebuilds one EPUB newspaper every morning, and the reader downloads it as an OPDS catalog entry.
+I built this so I could read my RSS and other feeds on a Xteink X4 Pro running [CrossPoint](https://crosspointreader.com) instead of on my phone. Nothing in it is specific to that reader: the output is a plain EPUB served over OPDS, so anything that speaks OPDS can pull the same issues — KOReader, a Kobo, an Android reader app, another e-ink device.
+
+The reader can't fetch feeds by itself. CrossPoint keeps background Wi-Fi and an RSS feature out of scope (single-core ESP32-S3, deep sleep), so nothing on the device can poll on a schedule. So the digest is built on a server: [RSSPub](https://github.com/harshit181/RSSPub) runs in a container, rebuilds one newspaper every morning, and the reader downloads it as a catalog entry.
 
 ```
 feeds (RSS/Atom)
       │  fetch + readability extraction + image downscale
       ▼
-RSSPub  ──  /opds        Atom catalog the reader browses
+RSSPub  ──  /opds          Atom catalog the reader browses
         ──  /epubs/*.epub  one digest per day, pruned after 7 days
-        ──  /             feed CRUD dashboard (basic auth)
+        ──  /              feed CRUD dashboard (basic auth)
       │
       ▼
-CrossPoint: Settings → Connectivity → OPDS Servers → <host>/opds
+reader: add <host>/opds as an OPDS catalog
 ```
 
 Live instance: <https://feed.izzudd.my.id> (dashboard requires basic auth; `/opds` and the EPUBs are public).
 
 ## What this repo is, and what it is not
 
-This is the **deployment**, not a fork of the generator: pinned container image, compose file, runbook, operational scripts, and the CrossPoint catalog plugin. The EPUB engine, dashboard and OPDS server are RSSPub's work — MIT, by [@harshit181](https://github.com/harshit181). If you want to change the generator itself, fork upstream.
+This is the **deployment**, not a fork of the generator: pinned container image, compose file, runbook, operational scripts, and the CrossPoint catalog plugin I use on my own reader. The EPUB engine, dashboard and OPDS server are RSSPub's work — MIT, by [@harshit181](https://github.com/harshit181). If you want to change the generator itself, fork upstream.
 
 ## Deploy
 
@@ -40,11 +42,14 @@ Then, in the dashboard (`http://<host>:3000`), add feeds and one schedule. Two s
 
 `docs/coolify.md` has the Coolify-specific steps, including the two failures that cost the most time: the image has no `curl`/`wget` (so a Coolify health check rolls the deploy back as unhealthy), and Let's Encrypt cannot issue a certificate behind a proxied Cloudflare record until the challenge is answered by the origin.
 
-## Reading it on the device
+## Reading it
 
-**OPDS (no files to install).** Settings → Connectivity → OPDS Servers → add `https://<host>/opds`, then browse from File Transfer → OPDS Browser. The URL must include `/opds` — pointing at the bare host gives "failed to parse feed".
+Any OPDS client: point it at `https://<host>/opds`. The URL must include `/opds` — pointing at the bare host gives "failed to parse feed".
 
-**SD plugin (one-tap list under Home → Plugins).** Copy `plugin/daily-digest/` to `/.crosspoint/plugins/daily-digest/` on the card (`/plugins` and `/.plugins` also work), then enable Settings → Connectivity → Plugins. The list downloads into `/Digest`, and the firmware is told to read the Atom feed with its `xml` catalog mode rather than expecting JSON.
+**CrossPoint (what I use).** Two ways:
+
+- *OPDS, no files to install.* Settings → Connectivity → OPDS Servers → add `https://<host>/opds`, then browse from File Transfer → OPDS Browser.
+- *SD plugin, a one-tap list under Home → Plugins.* Copy `plugin/daily-digest/` to `/.crosspoint/plugins/daily-digest/` on the card (`/plugins` and `/.plugins` also work), then enable Settings → Connectivity → Plugins. Downloads land in `/Digest`; the firmware is told to read the Atom feed with its `xml` catalog mode instead of expecting JSON.
 
 ## Daily operation
 

@@ -1,7 +1,7 @@
 services:
   rsspub:
     image: harshit181/rsspub:0.123.0
-    container_name: eink-feed
+    container_name: digestd
     restart: unless-stopped
     ports:
       - "3000:3000"
