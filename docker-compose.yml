@@ -1,0 +1,16 @@
+services:
+  rsspub:
+    image: harshit181/rsspub:0.123.0
+    container_name: eink-feed
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      RUST_LOG: info,html5ever=error
+    volumes:
+      # SQLite database: feeds, schedules, settings
+      - ./data/db:/app/db
+      # generated digests, served at /epubs/<file>.epub
+      - ./data/epubs:/app/epubs

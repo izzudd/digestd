@@ -1,0 +1,50 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax
+        run: for f in scripts/*.sh; do bash -n "$f"; done
+
+      - name: ShellCheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=error scripts/*.sh
+
+      - name: JSON and YAML parse
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          try:
+              import yaml
+          except ImportError:
+              yaml = None
+          ok = True
+          for p in list(pathlib.Path('plugin').rglob('*.json')):
+              try:
+                  json.loads(p.read_text())
+                  print(f'json ok: {p}')
+              except Exception as e:
+                  ok = False
+                  print(f'json FAIL: {p}: {e}')
+          for p in [pathlib.Path('docker-compose.yml')] + list(pathlib.Path('.github').rglob('*.yml')):
+              if yaml is None:
+                  print(f'yaml skipped (no pyyaml): {p}')
+                  continue
+              try:
+                  yaml.safe_load(p.read_text())
+                  print(f'yaml ok: {p}')
+              except Exception as e:
+                  ok = False
+                  print(f'yaml FAIL: {p}: {e}')
+          sys.exit(0 if ok else 1)
+          PY

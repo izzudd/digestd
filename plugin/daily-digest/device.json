@@ -1,0 +1,23 @@
+{
+  "title": "Daily Digest",
+  "description": "RSS digest EPUBs from feed.izzudd.my.id",
+  "browse": {
+    "format": "xml",
+    "url": "https://feed.izzudd.my.id/opds",
+    "item": "entry",
+    "fields": {
+      "title": "title",
+      "url": "link@href"
+    },
+    "resolve_urls": true,
+    "skip_self": true,
+    "extensions": [
+      ".epub"
+    ]
+  },
+  "download": {
+    "url": "{url}",
+    "dest_dir": "/Digest",
+    "filename": "{title}.epub"
+  }
+}
